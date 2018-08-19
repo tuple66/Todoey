@@ -7,21 +7,27 @@
 //
 
 import UIKit
+import CoreData
 
 class ToDoListViewController: UITableViewController {
 
-    //var itemArray = ["Buy crisps", "Buy Milk", "Buy potatoes" ]
-    let defaults = UserDefaults.standard
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+//    let defaults = UserDefaults.standard
+    
     var itemArray = [Item]()
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    
+    // when its delegate changes its value it is updated here
+    
+    var selectedCategory : Categories? {
+        didSet{
+            loadItems()
+        }
+    }
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        loadItems()
-        // Do any additional setup after loading the view, typically from a nib.
-
-        
+    
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -46,9 +52,12 @@ class ToDoListViewController: UITableViewController {
         return itemArray.count
     }
     
-    //MARK - TableView Delegate Methods
+    //MARK: - TableView Delegate Methods
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-    
+        
+//        context.delete(itemArray[indexPath.row])
+//
+//        itemArray.remove(at: indexPath.row)
         
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         //Call save function when toggled
@@ -58,7 +67,7 @@ class ToDoListViewController: UITableViewController {
         
     }
     
-    //MARK - Add NEw Items
+    //MARK: - Add NEw Items
     
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
         
@@ -68,8 +77,11 @@ class ToDoListViewController: UITableViewController {
        
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             // What happens when the action is pressed
-            let newitem = Item()
+            
+            let newitem = Item(context: self.context)
             newitem.title = textField.text!
+            newitem.done = false
+            newitem.parentCategory = self.selectedCategory
             self.itemArray.append(newitem)
             self.saveItems() // Call save function when data entered
             
@@ -87,42 +99,84 @@ class ToDoListViewController: UITableViewController {
     }
         
         
-    //MARK = Model Manilupulation Methods
+    //MARK: - Model Manilupulation Methods
         
         func saveItems(){
-            let encoder = PropertyListEncoder()
             
             do {
-                let data = try encoder.encode(itemArray)
-                try data.write(to: dataFilePath!)
+               try  context.save()
             } catch {
-                print("Error encoding item array \(error)")
+                print("Error saving context \(error)")
                 
             }
             tableView.reloadData()
             }
         
+      //This function requires a paramater if type NSFetchRequest, if one is not provided then a default is used
+    // This default calls a fetch request which isnt filtered so displays the complete list
+    
+    //This method requires 2 inputs one for item and the other for a predicate.
+    // If there is no first parameter then it is assigned a default of fetch request.
+    //If there is no second parameter then it is assigne an optional nil
+    
+    func loadItems(with request:NSFetchRequest<Item> = Item.fetchRequest(), predicate:NSPredicate? = nil) {
         
-    func loadItems(){
-        
-        if let data = try? Data(contentsOf: dataFilePath!) {
-            let decoder = PropertyListDecoder()
-            do {
-                itemArray = try decoder.decode([Item].self, from: data)
-            } catch {
-                print ("Error decoding item array")
-            }
+        //This line takes the category name from the category view controller and checks its name
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
+       
+       //This block checks to see if there are additional filtering required on the item names, it is optional so needs to be unwrapped. If it doesnt exist, ie there is no item filtering then a fetch request is called
+        if let additionalPredicate =  predicate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate] )
+        } else {
+            request.predicate = categoryPredicate
         }
         
-       
         
-        
-        
+        do {
+       itemArray  = try context.fetch(request)
+        } catch {
+            print ("Error fetching data from context \(error)")
+        }
+        tableView.reloadData()
     }
-    
-        
     
     
     
 }
+
+extension ToDoListViewController: UISearchBarDelegate {
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        print(searchBar.text!)
+        //Set up a request as an NSFetchRequest and set the type to be of Item
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        
+        //Setup a predicate to searche for text in title that contains what is in the searchbar
+        let predicate  = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        
+        //set the request predicate to the search rules created above
+       
+        
+        // setup the sorting to be ascending based on the title
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        
+        loadItems(with: request, predicate: predicate)
+    }
+
+
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0 {
+            loadItems()
+            DispatchQueue.main.async {
+                searchBar.resignFirstResponder()
+
+            }
+        }
+    
+    }
+}
+
+
+
+
+    
 
