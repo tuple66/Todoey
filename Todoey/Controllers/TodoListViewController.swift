@@ -52,12 +52,42 @@ class ToDoListViewController: UITableViewController {
         }
     }
     
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
+        if editingStyle == .delete {
+            if let item = todoItem?[indexPath.row]{
+                do {
+                    
+                    try realm.write {
+                        realm.delete(item  )
+                    }
+                } catch {
+                    print("Error saving done status, \(error)")
+                }
+                tableView.reloadData()
+            }
+        }
+    }
+    
+ 
+    
+    
+    
     //MARK: - TableView Delegate Methods
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-//
-//        todoItem[indexPath.row].done = !todoItem[indexPath.row].done
-//        //Call save function when toggled
-//        saveItems()
+        
+        if let item = todoItem?[indexPath.row]{
+            do {
+                
+                try realm.write {
+                   item.done = !item.done
+                }
+            } catch {
+                print("Error saving done status, \(error)")
+            }
+            tableView.reloadData()
+        }
+        
+
         
         tableView.deselectRow(at: indexPath, animated: true)
         
@@ -79,6 +109,7 @@ class ToDoListViewController: UITableViewController {
                     try self.realm.write {
                         let newitem = Item()
                         newitem.title = textField.text!
+                        newitem.createdDate = NSDate()
                         currentCategory.items.append(newitem)
                        
                     }
@@ -110,42 +141,30 @@ class ToDoListViewController: UITableViewController {
         tableView.reloadData()
     }
     
- 
-    
     
 }
 
-//extension ToDoListViewController: UISearchBarDelegate {
-//    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-//        print(searchBar.text!)
-//        //Set up a request as an NSFetchRequest and set the type to be of Item
-//        let request : NSFetchRequest<Item> = Item.fetchRequest()
-//
-//        //Setup a predicate to searche for text in title that contains what is in the searchbar
-//        let predicate  = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-//
-//        //set the request predicate to the search rules created above
-//
-//
-//        // setup the sorting to be ascending based on the title
-//        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
-//
-//        loadItems(with: request, predicate: predicate)
-//    }
-//
-//
-//    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-//        if searchBar.text?.count == 0 {
-//            loadItems()
-//            DispatchQueue.main.async {
-//                searchBar.resignFirstResponder()
-//
-//            }
-//        }
-//
-//    }
-//}
-//
+extension ToDoListViewController: UISearchBarDelegate {
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        todoItem = todoItem?.filter("title CONTAINS[cd] %@", searchBar.text!).sorted(byKeyPath: "createdDate", ascending: true)
+        tableView.reloadData()
+        
+    }
+
+
+
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0 {
+            loadItems()
+            DispatchQueue.main.async {
+                searchBar.resignFirstResponder()
+
+            }
+        }
+
+    }
+}
+
 
 
 
